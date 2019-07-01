@@ -2,8 +2,6 @@ library(jsonlite)
 library(data.table)
 library(tidyverse)
 
-root						<- "C:/Users/The Soviet Unit/Documents/R/Who Likes What/"
-# root						<- "D:/Users/afattore/Documents/R/data science/Who Likes What/"
 impDir          <- paste0(root,"imports", collapse = "")
 dataDir         <- paste0(root,"data", collapse = "")
 outDir          <- paste0(root,"outputs", collapse = "")
@@ -18,7 +16,7 @@ if(exists("dset")) {dset <- NULL}
 #   2 - post creation time
 #   3 - the list of likes coming from the facebook api
 #   4 - page information inputed by the user
-# the resulting dataset contains a row for each like
+#   the resulting dataset contains a row for each like
 
 setwd(impDir)
 
