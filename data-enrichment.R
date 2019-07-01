@@ -5,8 +5,6 @@ library(lubridate)
 library(jsonlite)
 library(plyr)
 
-root						<- "C:/Users/The Soviet Unit/Documents/R/Who Likes What/"
-# root						<- "D:/Users/afattore/Documents/R/data science/Who Likes What/"
 dataDir         <- paste0(root,"data")
 outDir          <- paste0(root,"outputs")
 utDir           <- paste0(root,"utilities")
@@ -19,7 +17,7 @@ rm("root")
 setwd(prpDir)
 
 dset <- read_csv(
-  "armani_dataset.csv",
+  "test_dataset.csv",
   col_types = cols(
     id = col_character(),
     total_likes = col_number(),
@@ -28,9 +26,7 @@ dset <- read_csv(
   )
 ) %>% data.table()
 
-# rename columns and preprocess data types where needed, then add a column
-# with the first names of users. This will be used to assign gender where
-# picture recognition fails.
+
 
 dset[,date := as.Date(created_time)]
 dset[is.na(total_shares), total_shares := 0]
@@ -41,9 +37,6 @@ dset[, month := month(created_time)]
 dset[, day_of_week := wday(created_time, label = T)]
 dset[, first_name := as.character(lapply(strsplit(as.character(name), " "),"[",1))]
 
-# fwrite(dset, "armani_working_dataset.csv")
-
-# create and export datasets for reference outside R
 
 page_list <- dset[,.(.N), by = .(page)]
 user_list <- dset[,.(.N), by = .(id, name)]
@@ -55,10 +48,7 @@ fwrite(page_list, "pages.csv")
 fwrite(user_list, "users.csv")
 fwrite(post_pictures, "pictures.csv")
 
-# prepare the export files for picture analysis with clarifai. These are three files:
-#   1 - pictures from the posts, with the post ID and picture URL
-#   2 - user profile pictures, with user ID's
-#   3 - user cover photos, with user ID's
+
 
 post_pictures <- dset[,.(.N), by = .(post, picture)][,.(post, url = picture)]
 user_pictures <- dset[user_picture != "none retrieved", .(.N), by = .(id, user_picture)][,.(id, url = user_picture)]
@@ -69,18 +59,7 @@ fwrite(post_pictures, "post_pictures.csv")
 fwrite(user_pictures, "user_pictures.csv")
 fwrite(cover_pictures, "cover_pictures.csv")
 
-# now the analysis is handed over to clarifai. The expectation is that the three image lists will be
-# analyzed in turn with the following models:
-#   post_pictures:  "general concepts"
-#   user_pictures:  "demographics", "general concepts"
-#   cover_pictures: "general concepts"
-# this analyses are expected to return lists of .json files, with the prefixes
-# "picture_analysis_by_" and a suffix indicating the type of model used, such as "general_", plus
-# a file ordinal number, and the ".json" extension.
-# once these are returned, the usual upload and merging procedure is followed, to complete the dataset.
-# Note that when using the clarifai import app, the different sets of analyses MUST be imported right after
-# being run, or each overwrites the one before. Therefore, when using the below section to import new data,
-# make sure you are aware of the dataset you're referring to.
+
 
 setwd(impDir)
 tags = seq(1,1242)
@@ -99,10 +78,7 @@ setwd(prpDir); fwrite(picture_set,"armani_user_pictures_demographics.csv")
 
 rm(picture_set)
 
-# once all the data are collected and properly stored, they can be merged into the dataset
-# the relevant files are assumed to be saved in the preprocessing directory
-# they are loaded in turn and merged into the main dataset by the relevant key.
-# mind the column names across the files, make sure they're recognizable when merged
+
 
 setwd(prpDir)
 up_gm <- read_csv("armani_user_pictures_general_model.csv", col_types = cols(id = col_character())) %>% data.table()
@@ -113,15 +89,6 @@ up_dm <- read_csv("armani_user_pictures_demographics.csv", col_types = cols(id =
 pp_gm[,duplicates := duplicated(post)]
 pp_gm <- pp_gm[duplicates == F][,duplicates := NULL]
 
-# demographics need further simplification before merging, in particular on behalf of the age group
-# age is estimated by clarifai as a distribution of probabilities over each year of age, from 0 to 99
-# with a cutoff to zero for ages estimated too high or too low. The age is estimated within a named
-# age group, based on the sum of probabilities within each age group - the group which sums to the
-# highest probability is selected. To do this, the raw demographic file is 'melt' in a table with three
-# columns: user id, age group, and probability, with one observation per user per age group.
-# To assign age groups, each age is assigned a numeric value, then split in age breaks, and labeled (using cut()).
-# Finally, the table is summarized by sum of probability per age group, and the result is further summarized
-# by taking only the age group with the highest sum of probabilities, using top_n().
 
 measure_vars <- paste0("demo_age_",seq(1,99))
 id_vars <- c("demo_gender","id","url")
@@ -178,13 +145,7 @@ dset[(demo_gender == "unclear" | demo_gender == "none_recognizable") & first_nam
 
 rm("name_list","female_names","male_names")
 
-# to add gender information where it was not possible through pure facial or name recognition
-# we first attemtp to classify based on the (manually compiled) list of names above. Where
-# this fails, we supplement by analyzing the concepts from the user picture. We repeat the procedure
-# for males and females. First, we add to the table a column where we record whether
-# in the concepts both the terms 'one' and 'man' are present, then forecast as male
-# those users. Then we repeat for females, and run again the same analyis based
-# on the cover photo
+
 
 gender_unclear <- dset[(demo_gender == "unclear" | demo_gender == "none_recognizable") & !is.na(user_picture_concepts), .(.N), by = .(id, name, demo_gender, user_picture_concepts, cover_picture_concepts)]
 gender_unclear[, man := grepl("\\bman\\b", user_picture_concepts)]
@@ -208,6 +169,4 @@ dset[id %in% female_ids[,id], demo_gender := "female"]
 gender_age <- dset[!is.na(demo_gender),.(.N), by = .(id, demo_gender, demo_age_group)]
 ggplot(gender_age, aes(demo_gender, fill = demo_age_group)) + geom_bar()
 
-rm("female_ids","gender_age","gender_unclear","male_ids")
 
-setwd(dataDir); fwrite(dset, "armani_working_dataset.csv")
